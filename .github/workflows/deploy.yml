@@ -14,6 +14,7 @@ jobs:
     env:
       IMAGE_NAME: spring-image2            # 이미지 이름
       CONTAINER_NAME: spring-container       # 컨테이너 이름
+      ORACLE_CONTAINER_NAME: oracle-container
       APP_PORT: 9000                         # EC2에서 사용할 포트
       NETWORK_NAME: my-net
       TAR_DIR: ./artifacts
@@ -91,7 +92,7 @@ jobs:
             docker run -d --name "${{ env.CONTAINER_NAME }}" \
               --network "${{ env.NETWORK_NAME }}" \
               -p "${{ env.APP_PORT }}:${{ env.APP_PORT }}" \
-              -e ORACLE_URL=jdbc:oracle:thin:@oracle-container:1521:xe \
+              -e ORACLE_URL=jdbc:oracle:thin:@${{ env.ORACLE_CONTAINER_NAME }}:1521:xe \
               "${{ env.IMAGE_NAME }}:latest"
 
             echo "[3/4] Clean up old tar files"
