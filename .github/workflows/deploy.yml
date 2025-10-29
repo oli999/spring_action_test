@@ -49,7 +49,6 @@ jobs:
           gzip -f "${TAR_FILE}"
           ls -lh "${TAR_FILE}.gz"
 
-      # ---- (A안) scp가 읽을 수 있게 권한 열기 ----
       - name: Make tar readable for scp
         run: |
           chmod 755 artifacts
@@ -58,12 +57,12 @@ jobs:
 
       # ---- EC2로 이미지 복사 ----
       - name: Copy image to EC2
-        uses: appleboy/scp-action@v0.1.8
+        uses: appleboy/scp-action@v0.1.7    # ← v0.1.7로
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "artifacts/*.tar.gz"       # ← ./ 제거 + 글롭 사용
+          source: "artifacts/*.tar.gz"
           target: "${{ env.OUT_DIR_EC2 }}"
           overwrite: true
 
@@ -77,8 +76,6 @@ jobs:
           script: |
             set -e
             cd "${{ env.OUT_DIR_EC2 }}"
-
-            # 글롭으로 최신 tar.gz 파일 자동 선택 (IMAGE_TAG 표현식 의존 제거)
             LATEST_GZ=$(ls -t "${{ env.IMAGE_NAME }}"-sha-*.tar.gz | head -n1)
             TAR_FILE="${LATEST_GZ%.gz}"
 
@@ -87,7 +84,6 @@ jobs:
             gunzip -f "${LATEST_GZ}"
             docker load -i "${TAR_FILE}"
 
-            # 새로 적재된 이미지 태그 추출 (sha-xxxx)
             NEW_TAG=$(basename "${TAR_FILE}" | sed -E 's/^'"${{ env.IMAGE_NAME }}"'-([^.]*)\.tar$/\1/')
             docker tag "${{ env.IMAGE_NAME }}:${NEW_TAG}" "${{ env.IMAGE_NAME }}:latest" || true
 
