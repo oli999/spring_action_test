@@ -12,8 +12,9 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     env:
-      IMAGE_NAME: ${{ secrets.APP_NAME }}     # spring-app
-      APP_PORT: ${{ secrets.APP_PORT }}       # 8080
+      IMAGE_NAME: spring-image2            # 이미지 이름
+      CONTAINER_NAME: spring-container       # 컨테이너 이름
+      APP_PORT: 9000                         # EC2에서 사용할 포트
       TAR_DIR: ./artifacts
       OUT_DIR_EC2: /home/ec2-user/spring2
 
@@ -64,7 +65,7 @@ jobs:
           overwrite: true
           strip_components: 1
 
-      # ---- EC2에서 컨테이너 재기동 (latest만 사용) ----
+      # ---- EC2에서 컨테이너 재기동 ----
       - name: Deploy container on EC2
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -80,14 +81,13 @@ jobs:
 
             echo "[1/4] Load image (:latest)"
             gunzip -f "${GZ_FILE}"
-            # 기존 latest 이미지/컨테이너 정리
-            docker stop "${{ env.IMAGE_NAME }}" 2>/dev/null || true
-            docker rm   "${{ env.IMAGE_NAME }}" 2>/dev/null || true
+            docker stop "${{ env.CONTAINER_NAME }}" 2>/dev/null || true
+            docker rm   "${{ env.CONTAINER_NAME }}" 2>/dev/null || true
             docker rmi  "${{ env.IMAGE_NAME }}:latest" 2>/dev/null || true
             docker load -i "${TAR_FILE}"
 
             echo "[2/4] Run new container (:latest)"
-            docker run -d --name "${{ env.IMAGE_NAME }}" \
+            docker run -d --name "${{ env.CONTAINER_NAME }}" \
               --network my-net \
               -p "${{ env.APP_PORT }}:${{ env.APP_PORT }}" \
               -e "SPRING_PROFILES_ACTIVE=prod" \
@@ -99,4 +99,4 @@ jobs:
             ls -t "${{ env.IMAGE_NAME }}"-latest.tar | awk 'NR>2 {print $1}' | xargs -r rm -f || true
             docker image prune -f || true
 
-            echo "[4/4] Deployed! ${{ env.IMAGE_NAME }}:latest"
+            echo "[4/4] ✅ Deployed! ${{ env.IMAGE_NAME }}:latest"
