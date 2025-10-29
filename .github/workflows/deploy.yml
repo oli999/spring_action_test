@@ -33,19 +33,16 @@ jobs:
       - name: Build with Maven
         run: mvn -B -DskipTests clean package
 
-      # ---- Docker 이미지 빌드 ----
+      # ---- Docker 이미지 빌드 (latest만) ----
       - name: Build Docker image
         run: |
-          SHORT_SHA=${GITHUB_SHA::7}
-          IMAGE_TAG="sha-${SHORT_SHA}"
-          docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -t ${IMAGE_NAME}:latest .
-          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+          docker build -t ${IMAGE_NAME}:latest .
 
-      - name: Save image as tar.gz
+      - name: Save image as tar.gz (latest 고정 파일명)
         run: |
           mkdir -p "${TAR_DIR}"
-          TAR_FILE="${TAR_DIR}/${IMAGE_NAME}-${IMAGE_TAG}.tar"
-          docker save -o "${TAR_FILE}" "${IMAGE_NAME}:${IMAGE_TAG}"
+          TAR_FILE="${TAR_DIR}/${IMAGE_NAME}-latest.tar"
+          docker save -o "${TAR_FILE}" "${IMAGE_NAME}:latest"
           gzip -f "${TAR_FILE}"
           ls -lh "${TAR_FILE}.gz"
 
@@ -57,7 +54,7 @@ jobs:
 
       # ---- EC2로 이미지 복사 ----
       - name: Copy image to EC2
-        uses: appleboy/scp-action@v0.1.7    # ← v0.1.7로
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
@@ -65,9 +62,9 @@ jobs:
           source: "artifacts/*.tar.gz"
           target: "${{ env.OUT_DIR_EC2 }}"
           overwrite: true
-          strip_components: 1 
+          strip_components: 1
 
-      # ---- EC2에서 컨테이너 재기동 ----
+      # ---- EC2에서 컨테이너 재기동 (latest만 사용) ----
       - name: Deploy container on EC2
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -77,32 +74,29 @@ jobs:
           script: |
             set -e
             cd "${{ env.OUT_DIR_EC2 }}"
-            LATEST_GZ=$(ls -t "${{ env.IMAGE_NAME }}"-sha-*.tar.gz | head -n1)
-            TAR_FILE="${LATEST_GZ%.gz}"
 
-            echo "[1/4] Load new image"
-            docker rmi "${{ env.IMAGE_NAME }}":latest 2>/dev/null || true
-            gunzip -f "${LATEST_GZ}"
-            docker load -i "${TAR_FILE}"
+            GZ_FILE="${{ env.IMAGE_NAME }}-latest.tar.gz"
+            TAR_FILE="${{ env.IMAGE_NAME }}-latest.tar"
 
-            NEW_TAG=$(basename "${TAR_FILE}" | sed -E 's/^'"${{ env.IMAGE_NAME }}"'-([^.]*)\.tar$/\1/')
-            docker tag "${{ env.IMAGE_NAME }}:${NEW_TAG}" "${{ env.IMAGE_NAME }}:latest" || true
-
-            echo "[2/4] Stop & remove old container"
+            echo "[1/4] Load image (:latest)"
+            gunzip -f "${GZ_FILE}"
+            # 기존 latest 이미지/컨테이너 정리
             docker stop "${{ env.IMAGE_NAME }}" 2>/dev/null || true
             docker rm   "${{ env.IMAGE_NAME }}" 2>/dev/null || true
+            docker rmi  "${{ env.IMAGE_NAME }}:latest" 2>/dev/null || true
+            docker load -i "${TAR_FILE}"
 
-            echo "[3/4] Run new container"
+            echo "[2/4] Run new container (:latest)"
             docker run -d --name "${{ env.IMAGE_NAME }}" \
               --network my-net \
               -p "${{ env.APP_PORT }}:${{ env.APP_PORT }}" \
               -e "SPRING_PROFILES_ACTIVE=prod" \
               -e ORACLE_URL=jdbc:oracle:thin:@oracle-container:1521:xe \
               --restart=always \
-              "${{ env.IMAGE_NAME }}:${NEW_TAG}"
+              "${{ env.IMAGE_NAME }}:latest"
 
-            echo "[4/4] Clean up old images/tar files"
-            ls -t "${{ env.IMAGE_NAME }}"-sha-*.tar | awk 'NR>3 {print $1}' | xargs -r rm -f || true
+            echo "[3/4] Clean up old tar files"
+            ls -t "${{ env.IMAGE_NAME }}"-latest.tar | awk 'NR>2 {print $1}' | xargs -r rm -f || true
             docker image prune -f || true
 
-            echo "Deployed! ${{ env.IMAGE_NAME }}:${NEW_TAG}"
+            echo "[4/4] Deployed! ${{ env.IMAGE_NAME }}:latest"
