@@ -66,6 +66,7 @@ jobs:
           target: "${{ env.OUT_DIR_EC2 }}"
           overwrite: true
           strip_components: 1 
+
       # ---- EC2에서 컨테이너 재기동 ----
       - name: Deploy container on EC2
         uses: appleboy/ssh-action@v1.2.0
@@ -93,8 +94,10 @@ jobs:
 
             echo "[3/4] Run new container"
             docker run -d --name "${{ env.IMAGE_NAME }}" \
+              --network my-net \
               -p "${{ env.APP_PORT }}:${{ env.APP_PORT }}" \
               -e "SPRING_PROFILES_ACTIVE=prod" \
+              -e ORACLE_URL=jdbc:oracle:thin:@oracle-container:1521:xe \
               --restart=always \
               "${{ env.IMAGE_NAME }}:${NEW_TAG}"
 
