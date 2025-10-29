@@ -65,7 +65,7 @@ jobs:
           source: "artifacts/*.tar.gz"
           target: "${{ env.OUT_DIR_EC2 }}"
           overwrite: true
-
+          strip_components: 1 
       # ---- EC2에서 컨테이너 재기동 ----
       - name: Deploy container on EC2
         uses: appleboy/ssh-action@v1.2.0
