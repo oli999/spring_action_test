@@ -15,6 +15,7 @@ jobs:
       IMAGE_NAME: spring-image2            # 이미지 이름
       CONTAINER_NAME: spring-container       # 컨테이너 이름
       APP_PORT: 9000                         # EC2에서 사용할 포트
+      NETWORK_NAME: my-net
       TAR_DIR: ./artifacts
       OUT_DIR_EC2: /home/ec2-user/spring2
 
@@ -88,11 +89,9 @@ jobs:
 
             echo "[2/4] Run new container (:latest)"
             docker run -d --name "${{ env.CONTAINER_NAME }}" \
-              --network my-net \
+              --network "${{ env.NETWORK_NAME }}" \
               -p "${{ env.APP_PORT }}:${{ env.APP_PORT }}" \
-              -e "SPRING_PROFILES_ACTIVE=prod" \
               -e ORACLE_URL=jdbc:oracle:thin:@oracle-container:1521:xe \
-              --restart=always \
               "${{ env.IMAGE_NAME }}:latest"
 
             echo "[3/4] Clean up old tar files"
